@@ -35,8 +35,12 @@ export default function Asesor() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const inicioMes = '2026-09-01';
-      const finMes = '2026-09-30';
+      const ahora = new Date();
+      const mes = ahora.getMonth() + 1;
+      const anio = ahora.getFullYear();
+      const diasEnMes = new Date(anio, mes, 0).getDate();
+      const inicioMes = `${anio}-${String(mes).padStart(2, '0')}-01`;
+      const finMes = `${anio}-${String(mes).padStart(2, '0')}-${String(diasEnMes).padStart(2, '0')}`;
 
       // 1. Traer Transacciones para calcular ingresos y gastos del mes
       const { data: trans } = await supabase
@@ -51,7 +55,8 @@ export default function Asesor() {
         .from('presupuestos')
         .select('monto_limite, categorias(nombre)')
         .eq('usuario_id', user.id)
-        .eq('mes', 9);
+        .eq('mes', mes)
+        .eq('anio', anio);
 
       // 3. Traer Deudas pendientes
       const { data: deudas } = await supabase
@@ -141,7 +146,9 @@ export default function Asesor() {
 
         <div className="bg-[#141414] rounded-2xl p-6 border border-zinc-800/50 mb-4">
           <p className="text-xs text-zinc-500 tracking-wider font-semibold mb-4">CONTEXTO DEL MES</p>
-          <h2 className="text-xl font-serif text-[#e4dec7] mb-6">Septiembre de 2026</h2>
+          <h2 className="text-xl font-serif text-[#e4dec7] mb-6">
+            {new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, (c) => c.toUpperCase())}
+          </h2>
           
           <div className="space-y-3 text-sm">
             <div className="flex justify-between text-zinc-400">

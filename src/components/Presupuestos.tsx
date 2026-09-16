@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { categoriaService } from '../services/categoriaService';
 
 interface Categoria {
   id: number;
@@ -25,17 +26,30 @@ export default function Presupuestos() {
   const [selectedCategoria, setSelectedCategoria] = useState<number | ''>('');
   const [montoLimite, setMontoLimite] = useState<string>('');
 
-  const mesActual = 9; // Septiembre según tu diseño
-  const anioActual = 2026;
+  const ahora = new Date();
+  const mesActual = ahora.getMonth() + 1; // 1-12
+  const anioActual = ahora.getFullYear();
+  const diasEnMes = new Date(anioActual, mesActual, 0).getDate();
+  const nombreMes = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ][mesActual - 1];
 
   const fetchData = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-    // 1. Obtener todas las categorías para el select
-    const { data: cats } = await supabase.from('categorias').select('*').eq('usuario_id', user.id);
-    if (cats) setCategorias(cats);
+    // 1. Categorías fijas (se crean en BD si faltan)
+    try {
+      const cats = await categoriaService.getCategorias(user.id);
+      setCategorias(cats);
+    } catch (e) {
+      console.warn('Error categorías:', e);
+    }
 
     // 2. Obtener presupuestos del mes
     const { data: presups } = await supabase
@@ -46,8 +60,8 @@ export default function Presupuestos() {
       .eq('anio', anioActual);
 
     // 3. Obtener transacciones (gastos) del mes para calcular el progreso
-    const inicioMes = `${anioActual}-09-01`;
-    const finMes = `${anioActual}-09-30`;
+    const inicioMes = `${anioActual}-${String(mesActual).padStart(2, '0')}-01`;
+    const finMes = `${anioActual}-${String(mesActual).padStart(2, '0')}-${String(diasEnMes).padStart(2, '0')}`;
     const { data: transacciones } = await supabase
       .from('transacciones')
       .select('categoria_id, monto')
@@ -100,23 +114,33 @@ export default function Presupuestos() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !selectedCategoria || !montoLimite) return;
+    if (!user) {
+      alert('Sesión no válida');
+      return;
+    }
+    if (!selectedCategoria || !montoLimite) {
+      alert('Elige categoría y monto límite');
+      return;
+    }
 
+    let error;
     if (editId) {
-      // Editar
-      await supabase.from('presupuestos').update({
+      ({ error } = await supabase.from('presupuestos').update({
         categoria_id: Number(selectedCategoria),
         monto_limite: Number(montoLimite)
-      }).eq('id', editId);
+      }).eq('id', editId));
     } else {
-      // Crear
-      await supabase.from('presupuestos').insert({
+      ({ error } = await supabase.from('presupuestos').insert({
         usuario_id: user.id,
         categoria_id: Number(selectedCategoria),
         mes: mesActual,
         anio: anioActual,
         monto_limite: Number(montoLimite)
-      });
+      }));
+    }
+    if (error) {
+      alert('Error al guardar presupuesto: ' + error.message + '\nRevisa RLS de la tabla presupuestos.');
+      return;
     }
     setIsModalOpen(false);
     fetchData();
@@ -132,7 +156,7 @@ export default function Presupuestos() {
   return (
     <div className="p-8 bg-[#0a0a0a] text-zinc-200 min-h-screen font-sans">
       <div className="flex justify-between items-start mb-2">
-        <h1 className="text-4xl font-serif text-[#e4dec7]">Septiembre de 2026</h1>
+        <h1 className="text-4xl font-serif text-[#e4dec7]">{nombreMes} de {anioActual}</h1>
         <button 
           onClick={() => handleOpenModal()}
           className="bg-[#e4dec7] hover:bg-[#d4ceb8] text-zinc-900 font-medium px-4 py-2 rounded-full text-sm transition-colors"

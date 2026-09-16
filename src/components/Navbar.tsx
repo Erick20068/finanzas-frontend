@@ -8,9 +8,10 @@ interface NavbarProps {
   setVistaActual: (vista: string) => void;
   menuAbierto: boolean;
   setMenuAbierto: (abierto: boolean) => void;
+  onAbrirReporte?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ vistaActual, setVistaActual, menuAbierto, setMenuAbierto }) => {
+export const Navbar: React.FC<NavbarProps> = ({ vistaActual, setVistaActual, menuAbierto, setMenuAbierto, onAbrirReporte }) => {
   const [userId, setUserId] = useState<string>('');
   const [userEmail, setUserEmail] = useState<string>('');
   const [userName, setUserName] = useState<string>('Usuario');
@@ -119,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({ vistaActual, setVistaActual, men
 
         <div className="p-4 border-t border-neutral-800 space-y-4">
           <button 
-            onClick={() => alert('Generando reporte del mes...')}
+            onClick={() => onAbrirReporte?.()}
             className="w-full py-2.5 px-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white rounded-xl text-xs font-medium transition"
           >
             Reporte del mes

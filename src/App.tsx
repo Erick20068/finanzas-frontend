@@ -11,6 +11,7 @@ import Calendario from './components/calendario';
 import { NuevoMovimientoModal } from './components/momvimientos/NuevoMovimientoModal';
 import Presupuestos from './components/Presupuestos';
 import Asesor from './components/Asesor';
+import ReporteMesModal from './components/ReporteMesModal';
 
 export function App() {
   const [session, setSession] = useState<any>(null);
@@ -20,6 +21,7 @@ export function App() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [modalMovimiento, setModalMovimiento] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [modalReporte, setModalReporte] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -70,6 +72,7 @@ export function App() {
         setVistaActual={setVistaActual}
         menuAbierto={menuAbierto}
         setMenuAbierto={setMenuAbierto}
+        onAbrirReporte={() => setModalReporte(true)}
       />
       <div className="flex-1 flex flex-col min-w-0 md:ml-64 transition-all">
         <header className="bg-[#0a0a0a] border-b border-neutral-800/80 px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-30">
@@ -89,7 +92,9 @@ export function App() {
         </header>
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           {vistaActual === 'resumen' && <Dashboard key={refreshKey} />}
-          {vistaActual === 'movimientos' && <Movimientos key={refreshKey} />}
+          {vistaActual === 'movimientos' && (
+            <Movimientos key={refreshKey} onNuevoMovimientoClick={() => setModalMovimiento(true)} />
+          )}
           {vistaActual === 'presupuestos' && <Presupuestos key={refreshKey} />}
           {vistaActual === 'calendario' && <Calendario key={refreshKey} />}
           {vistaActual === 'asesor' && <Asesor key={refreshKey} />}
@@ -99,6 +104,7 @@ export function App() {
       {modalMovimiento && (
         <NuevoMovimientoModal onClose={() => setModalMovimiento(false)} onSuccess={handleMovimientoCreado} />
       )}
+      <ReporteMesModal isOpen={modalReporte} onClose={() => setModalReporte(false)} />
     </div>
   );
 }

@@ -1,9 +1,28 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { usuarioService } from '../services/usuarioService';
 import { Loader2, Eye, EyeOff, Wallet, PiggyBank, LineChart } from 'lucide-react';
 
 interface LoginProps {
   onSwitchToRegister: () => void;
+}
+
+
+function traducirErrorLogin(msg: string): string {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('email not confirmed') || m.includes('not confirmed')) {
+    return 'Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja (y spam) o desactiva Confirm email en Supabase.';
+  }
+  if (m.includes('invalid login') || m.includes('invalid credentials') || m.includes('invalid_grant')) {
+    return 'Correo o contraseña incorrectos.';
+  }
+  if (m.includes('user not found')) {
+    return 'No existe una cuenta con ese correo. Regístrate primero.';
+  }
+  if (m.includes('too many') || m.includes('rate limit')) {
+    return 'Demasiados intentos. Espera un momento.';
+  }
+  return msg || 'Error al iniciar sesión';
 }
 
 export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
@@ -19,13 +38,21 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
       if (error) throw error;
+      // Asegurar fila en public.usuarios (si el trigger o el registro fallaron)
+      if (data.user) {
+        try {
+          await usuarioService.asegurarPerfil(data.user);
+        } catch (e) {
+          console.warn('No se pudo asegurar perfil:', e);
+        }
+      }
     } catch (err: any) {
-      setError(err.message || 'Credenciales incorrectas o error al iniciar sesión');
+      setError(traducirErrorLogin(err?.message || String(err)));
     } finally {
       setLoading(false);
     }

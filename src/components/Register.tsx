@@ -7,6 +7,26 @@ interface RegisterProps {
   onSwitchToLogin: () => void;
 }
 
+function traducirErrorAuth(msg: string): string {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('already registered') || m.includes('user already') || m.includes('already been registered')) {
+    return 'Este correo ya está registrado. Inicia sesión o usa otro email.';
+  }
+  if (m.includes('password') && (m.includes('least') || m.includes('short') || m.includes('6'))) {
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  }
+  if (m.includes('invalid') && m.includes('email')) {
+    return 'El correo no es válido.';
+  }
+  if (m.includes('rate limit') || m.includes('too many')) {
+    return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+  }
+  if (m.includes('signup is disabled') || m.includes('signups not allowed')) {
+    return 'El registro está deshabilitado en Supabase. Actívalo en Authentication → Providers → Email.';
+  }
+  return msg || 'Error al registrar la cuenta';
+}
+
 export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
@@ -21,41 +41,48 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
     setError(null);
     setSuccessMsg(null);
 
+    if (password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // 1. Registrar en Supabase Auth
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
+        options: {
+          data: {
+            nombre_completo: nombre.trim(),
+          },
+        },
       });
+
       if (signUpError) throw signUpError;
 
-      if (data.user) {
-        // 2. Crear el perfil complementario a través del backend Java
-        try {
-          await usuarioService.crearUsuario({
-            id: data.user.id,
-            nombreCompleto: nombre,
-            correo: email,
-            monedaPreferida: 'USD',
-          });
-        } catch (perfilErr: any) {
-          console.error('Error al crear el perfil en el backend:', perfilErr);
-          setError(
-            'Tu cuenta de acceso se creó, pero no se pudo guardar tu perfil en el servidor: ' +
-            (perfilErr?.response?.data?.message || perfilErr?.message || 'error desconocido del backend') +
-            '. Avisa al soporte con este mensaje.'
-          );
-          setLoading(false);
-          return;
-        }
+      if (!data.user) {
+        throw new Error('No se pudo crear el usuario. Revisa Auth en Supabase.');
       }
 
-      setSuccessMsg('¡Cuenta creada con éxito! Redirigiendo...');
-      setTimeout(() => {
-        onSwitchToLogin();
-      }, 1500);
+      // Perfil: no bloquea el registro si falla (RLS / sin sesión / backend)
+      await usuarioService.crearUsuario({
+        id: data.user.id,
+        nombreCompleto: nombre.trim(),
+        correo: email.trim(),
+        monedaPreferida: 'USD',
+      });
+
+      if (!data.session) {
+        setSuccessMsg(
+          'Cuenta creada. Si Confirm email está activo, revisa tu correo y luego inicia sesión.'
+        );
+      } else {
+        setSuccessMsg('¡Cuenta creada con éxito! Redirigiendo al login...');
+        setTimeout(() => onSwitchToLogin(), 1200);
+      }
     } catch (err: any) {
-      setError(err.message || 'Error al registrar la cuenta');
+      console.error('Registro:', err);
+      setError(traducirErrorAuth(err?.message || String(err)));
     } finally {
       setLoading(false);
     }
@@ -89,56 +116,53 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               required
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              placeholder="Erick Guaillas"
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-600 transition"
+              className="w-full bg-[#0f0f0f] border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+              placeholder="Tu nombre"
             />
           </div>
-
           <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Correo electrónico</label>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Correo</label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@correo.com"
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-600 transition"
+              className="w-full bg-[#0f0f0f] border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+              placeholder="tu@email.com"
             />
           </div>
-
           <div>
             <label className="block text-xs font-medium text-neutral-400 mb-1">Contraseña</label>
             <input
               type="password"
               required
+              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-600 transition"
+              className="w-full bg-[#0f0f0f] border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+              placeholder="Mínimo 6 caracteres"
             />
           </div>
-
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-white text-black hover:bg-neutral-200 font-medium py-3 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-sm"
+            className="w-full bg-[#d4d4c8] hover:bg-[#c5c5b8] text-[#1a1a1a] font-semibold text-sm py-3 rounded-xl transition disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {loading && <Loader2 className="animate-spin" size={16} />}
-            Registrarse
+            {loading && <Loader2 size={16} className="animate-spin" />}
+            Crear cuenta
           </button>
         </form>
 
-        <div className="text-center pt-2">
-          <p className="text-xs text-neutral-500">
-            ¿Ya tienes una cuenta?{' '}
-            <button
-              onClick={onSwitchToLogin}
-              className="text-white font-medium hover:underline focus:outline-none"
-            >
-              Inicia sesión
-            </button>
-          </p>
-        </div>
+        <p className="text-center text-xs text-neutral-500">
+          ¿Ya tienes cuenta?{' '}
+          <button
+            type="button"
+            onClick={onSwitchToLogin}
+            className="text-[#d4d4c8] hover:underline font-medium"
+          >
+            Inicia sesión
+          </button>
+        </p>
       </div>
     </div>
   );
